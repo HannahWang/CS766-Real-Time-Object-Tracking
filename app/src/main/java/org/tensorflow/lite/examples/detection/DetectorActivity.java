@@ -39,7 +39,7 @@ import org.tensorflow.lite.examples.detection.env.BorderedText;
 import org.tensorflow.lite.examples.detection.env.ImageUtils;
 import org.tensorflow.lite.examples.detection.env.Logger;
 import org.tensorflow.lite.examples.detection.tflite.Classifier;
-// import org.tensorflow.lite.examples.detection.tflite.TFLiteObjectDetectionAPIModel;
+import org.tensorflow.lite.examples.detection.tflite.TFLiteObjectDetectionAPIModel;
 import org.tensorflow.lite.examples.detection.tflite.TensorFlowYoloDetector;
 import org.tensorflow.lite.examples.detection.tracking.MultiBoxTracker;
 
@@ -54,10 +54,7 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
   private static final int TF_OD_API_INPUT_SIZE = 300;
   private static final boolean TF_OD_API_IS_QUANTIZED = true;
   private static final String TF_OD_API_MODEL_FILE = "detect.tflite";
-  //private static final String TF_OD_API_MODEL_FILE = "mobilenet_quant_v1_224.tflite";
   private static final String TF_OD_API_LABELS_FILE = "file:///android_asset/labelmap.txt";
-  //private static final String TF_OD_API_LABELS_FILE = "file:///android_asset/labels.txt";
-  private static final DetectorMode MODE = DetectorMode.TF_OD_API;
 
   // yolo model
   private static final String YOLO_MODEL_FILE = "file:///android_asset/tiny-yolo-voc-graph.pb";
@@ -67,9 +64,15 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
   private static final String YOLO_OUTPUT_NAMES = "output";
   private static final int YOLO_BLOCK_SIZE = 32;
 
+  private enum DetectorMode {
+    TF_OD_API, YOLO;
+  }
+  private static final DetectorMode MODE = DetectorMode.YOLO;
+
   // Minimum detection confidence to track a detection.
   private static final float MINIMUM_CONFIDENCE_TF_OD_API = 0.5f;
-  private static final boolean MAINTAIN_ASPECT = false;
+  private static final float MINIMUM_CONFIDENCE_YOLO = 0.25f;
+  private static final boolean MAINTAIN_ASPECT = MODE == DetectorMode.YOLO;
   private static final Size DESIRED_PREVIEW_SIZE = new Size(640, 480);
   private static final boolean SAVE_PREVIEW_BITMAP = false;
   private static final float TEXT_SIZE_DIP = 10;
@@ -109,25 +112,27 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
     int cropSize = TF_OD_API_INPUT_SIZE;
 
     try {
-      /*
-      detector =
-          TFLiteObjectDetectionAPIModel.create(
-              getAssets(),
-              TF_OD_API_MODEL_FILE,
-              TF_OD_API_LABELS_FILE,
-              TF_OD_API_INPUT_SIZE,
-              TF_OD_API_IS_QUANTIZED);
-      cropSize = TF_OD_API_INPUT_SIZE;*/
-      detector =
-              TensorFlowYoloDetector.create(
-                      getAssets(),
-                      YOLO_MODEL_FILE,
-                      YOLO_LABELS_FILE,
-                      YOLO_INPUT_SIZE,
-                      YOLO_INPUT_NAME,
-                      YOLO_OUTPUT_NAMES,
-                      YOLO_BLOCK_SIZE);
-      cropSize = YOLO_INPUT_SIZE;
+      if (MODE == DetectorMode.TF_OD_API) {
+        detector =
+                TFLiteObjectDetectionAPIModel.create(
+                        getAssets(),
+                        TF_OD_API_MODEL_FILE,
+                        TF_OD_API_LABELS_FILE,
+                        TF_OD_API_INPUT_SIZE,
+                        TF_OD_API_IS_QUANTIZED);
+        cropSize = TF_OD_API_INPUT_SIZE;
+      } else if (MODE == DetectorMode.YOLO) {
+        detector =
+                TensorFlowYoloDetector.create(
+                        getAssets(),
+                        YOLO_MODEL_FILE,
+                        YOLO_LABELS_FILE,
+                        YOLO_INPUT_SIZE,
+                        YOLO_INPUT_NAME,
+                        YOLO_OUTPUT_NAMES,
+                        YOLO_BLOCK_SIZE);
+        cropSize = YOLO_INPUT_SIZE;
+      }
     } catch (final IOException e) {
       e.printStackTrace();
       LOGGER.e("Exception initializing classifier!", e);
@@ -228,6 +233,9 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
               case TF_OD_API:
                 minimumConfidence = MINIMUM_CONFIDENCE_TF_OD_API;
                 break;
+              case YOLO:
+                minimumConfidence = MINIMUM_CONFIDENCE_YOLO;
+                break;
             }
 
             final List<Classifier.Recognition> mappedRecognitions =
@@ -271,12 +279,6 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
   @Override
   protected Size getDesiredPreviewFrameSize() {
     return DESIRED_PREVIEW_SIZE;
-  }
-
-  // Which detection model to use: by default uses Tensorflow Object Detection API frozen
-  // checkpoints.
-  private enum DetectorMode {
-    TF_OD_API;
   }
 
   @Override
